@@ -1,20 +1,42 @@
-const { RawSourceMap, SourceMapConsumer, SourceMapGenerator, SourceNode } = require('source-map');
+const { SourceMapConsumer, SourceMapGenerator, SourceNode } = require('source-map');
 const { readFileSync, writeFileSync } = require('fs');
 
 
+// Load files.
 const original = readFileSync('./files/original.ts', 'utf-8');
-
 const transpile1Content = readFileSync('./files/transpile-1.js', 'utf-8');
 const transpile1Map = JSON.parse(readFileSync('./files/transpile-1.js.map', 'utf-8'));
-
 const transpile2Content = readFileSync('./files/transpile-2.js', 'utf-8');
 const transpile2Map = JSON.parse(readFileSync('./files/transpile-2.js.map', 'utf-8'));
 
-const transpile2ToOriginalMap = JSON.parse(readFileSync('./files/transpile-2-to-original.js.map', 'utf-8'));
+// Validate originals.
+console.log('transpile1Map valid:', validSourceMap(transpile1Content, transpile1Map));
+console.log('transpile2Map valid:', validSourceMap(transpile2Content, transpile2Map));
+
+// Create chained maps.
+const chain2Into1Map = chainSourceMaps(transpile1Map, transpile2Map);
+const chain1Into2Map = chainSourceMaps(transpile2Map, transpile1Map);
+
+// Validate chained maps.
+console.log('chain2Into1Map valid:', validSourceMap(transpile2Content, chain2Into1Map));
+console.log('chain1Into2Map valid:', validSourceMap(transpile2Content, chain1Into2Map));
+
+// Write chained maps to disk.
+writeFileSync('./files/chain-2-into-1.js.map', JSON.stringify(chain2Into1Map));
+writeFileSync('./files/chain-1-into-2.js.map', JSON.stringify(chain1Into2Map));
+
+// Visualize these with source-map-visualization/index.html by drag and dropping transpile-2.js plus the chained map.
+// This is a modified version of http://sokra.github.io/source-map-visualization/ patched with 
+// https://github.com/mozilla/source-map/pull/257 (search for /** PATCH_HERE */ on bundle.js) to bypass the error.
+// - transpile-2.js+chain-2-into-1.js.map will show the correct mappings.
+// - transpile-2.js+chain-1-into-2.js.map will show incorrect mappings.
+
+
+// Helpers.
 
 // Test if the sourcemap can be consumed.
 // Doesn't guarantee the sourcemap is good, just that it doesn't break source-map.
-function validSourceMap(code, map){
+function validSourceMap(code, map) {
   var consumer = new SourceMapConsumer(map);
   try {
     // This will fail with `TypeError: Cannot read property 'substr' of undefined` on 
@@ -26,97 +48,18 @@ function validSourceMap(code, map){
     SourceNode.fromStringWithSourceMap(code, consumer);
     return true;
   } catch (e) {
-    return false;
+    if (e.message === `Cannot read property 'substr' of undefined`) {
+      return false;
+    }
+    throw e;
   }
 }
 
-
-console.log('transpile2Map valid:', validSourceMap(transpile2Content, transpile2Map));
-console.log('transpile2ToOriginalMap valid:', validSourceMap(transpile2Content, transpile2ToOriginalMap));
-
+// Create a new sourcemap from sm2 back to the source of sm1.
 // Simple chaining example https://github.com/mozilla/source-map/issues/216#issuecomment-150839869
-
-// Chain the sourcemaps.
-const consumer = new SourceMapConsumer(transpile2Map);
-const generator = SourceMapGenerator.fromSourceMap(consumer);
-generator.applySourceMap(new SourceMapConsumer(transpile1Map));
-newSourceMapJson = generator.toJSON();
-newSourceMap = JSON.stringify(generator.toJSON());
-
-console.log(newSourceMapJson.file);
-console.log(newSourceMapJson.sources);
-// console.log(newSourceMap);
-console.log('test source map valid:', validSourceMap(transpile2Content, newSourceMapJson));
-writeFileSync('./test-map.js.map', newSourceMap)
-
-
-// firstSourceMap 
-// var sm1 = new SourceMapConsumer(previousSourceMap);
-// console.log(previousSourceMap.file);
-// console.log(previousSourceMap.sources);
-
-// // secondSourceMap 
-// var sm2 = new SourceMapConsumer(intermediateSourceMap);
-// console.log(intermediateSourceMap.file);
-// console.log(intermediateSourceMap.sources);
-
-// var smg = SourceMapGenerator.fromSourceMap(sm2)
-// smg.applySourceMap(sm1);
-// var sm3 = new SourceMapConsumer(smg.toJSON());
-// console.log(sm3.file);
-// console.log(sm3.sources);
-// // console.log(sm3)
-
-// var firstSourceMap = {
-//   version: 3,
-//   file: 'firstResult.js',
-//   names: [],
-//   sources: ['source.js'],
-//   // sourceRoot: 'http://example.com/www/js/',
-//   // mappings: 'AAAA'
-//   mappings: ";;;;;;;;;;AAAA,OAAO,EAAE,cAAc,EAAE,MAAM,EAAc,MAAM,eAAe,CAAC;AACnE,OAAO,EAAE,EAAE,EAAE,MAAM,oBAAoB,CAAC;AACxC,OAAO,EAAE,cAAc,EAAE,MAAM,mBAAmB,CAAC;AACnD,OAAO,EAAE,IAAI,EAAE,MAAM,eAAe,CAAC;AACrC,OAAO,EAAE,YAAY,EAAE,MAAM,2BAA2B,CAAC;AAEzD;;;;;;;;;;;;GAYG;AACH,MAAM,CAAC,IAAM,SAAS,GAAG,IAAI,cAAc,CAAqB,UAAU,CAAC,CAAC;AAU5E;;;GAGG;AAEH;IAA0C,wCAAc;IAGtD,8BAAY,IAAU,EAAE,SAAuB,EAAqB,QAAuB;QAA3F,YACE,kBAAM,IAAI,EAAE,SAAS,CAAC,SAEvB;QALO,0BAAoB,GAAe,EAAE,CAAC;QAI5C,KAAI,CAAC,eAAe,CAAC,QAAQ,CAAC,CAAC;;IACjC,CAAC;IAED,8CAAe,GAAf,UAAgB,QAAQ,EAAE,SAAS;QACjC,EAAE,CAAC,CAAC,IAAI,CAAC,oBAAoB,CAAC,QAAQ,CAAC,CAAC,CAAC,CAAC;YACxC,MAAM,CAAC,EAAE,CAAC,IAAI,CAAC,oBAAoB,CAAC,QAAQ,CAAC,CAAC,SAAS,CAAC,IAAI,CAAC,CAAC,CAAC;QACjE,CAAC;QACD,MAAM,CAAC,iBAAM,eAAe,YAAC,QAAQ,EAAE,SAAS,CAAC,CAAC;IACpD,CAAC;IAEO,8CAAe,GAAvB,UAAwB,QAAuB;QAA/C,iBAOC;QANC,IAAM,GAAG,GAAG,QAAQ,CAAC,aAAa,CAAC,KAAK,CAAC,CAAC;QAC1C,QAAQ,CAAC,OAAO,CAAC,UAAA,IAAI;YACnB,mFAAmF;YACnF,GAAG,CAAC,SAAS,GAAG,IAAI,CAAC,SAAS,CAAC;YAC/B,KAAI,CAAC,oBAAoB,CAAC,IAAI,CAAC,IAAI,CAAC,GAAG,GAAG,CAAC,aAAa,CAAC,KAAK,CAAC,CAAC;QAClE,CAAC,CAAC,CAAC;IACL,CAAC;IACI,mCAAc,GAArB,cAA0B,MAAM,CAAC,CAAE,EAAE,IAAI,EAAE,IAAI,EAAE,EAAE,EAAE,IAAI,EAAE,YAAY,EAAE,EAAE,EAAE,IAAI,EAAE,IAAI,EAAE,UAAU,EAAE,CAAC,EAAE,IAAI,EAAE,MAAM,EAAE,IAAI,EAAE,CAAC,SAAS,CAAC,EAAE,CAAC,EAAE,CAAE,CAAC,CAAC,CAAhJ;IAAA,2BAAC;AAAD,CAvBA,AAuBC,CAvByC,cAAc,GAuBvD"
-// };
-// // var firstSourceMap = previousSourceMap;
-
-// var secondSourceMap = {
-//   version: 3,
-//   file: 'secondResult.js',
-//   names: [],
-//   sources: ['firstResult.js'],
-//   // sourceRoot: 'http://example.com/www/js/',
-//   // mappings: 'AAAA,CAAC,CAAC,CAAC,CAAC'
-//   mappings: ";AAUA,OAAO,EAAE,cAAc,EAAE,MAAM,EAAE,MAAM,eAAe,CAAC;AACvD,OAAO,EAAE,EAAE,EAAE,MAAM,oBAAoB,CAAC;AACxC,OAAO,EAAE,cAAc,EAAE,MAAM,mBAAmB,CAAC;AACnD,OAAO,EAAE,IAAI,EAAE,MAAM,eAAe,CAAC;AACrC,OAAO,EAAE,YAAY,EAAE,MAAM,2BAA2B,CAAC;AACzD;;;;;;;;;;;;GAYG;AACH,MAAM,CAAC,IAAI,SAAS,GAAG,IAAI,cAAc,CAAC,UAAU,CAAC,CAAC;AACtD;;;GAGG;AACH,IAAI,oBAAoB,GAAG,CAAC,UAAU,MAAM;IACxC,SAAS,CAAC,oBAAoB,EAAE,MAAM,CAAC,CAAC;IACxC,8BAA8B,IAAI,EAAE,SAAS,EAAE,QAAQ;QACnD,IAAI,KAAK,GAAG,MAAM,CAAC,IAAI,CAAC,IAAI,EAAE,IAAI,EAAE,SAAS,CAAC,IAAI,IAAI,CAAC;QACvD,KAAK,CAAC,oBAAoB,GAAG,EAAE,CAAC;QAChC,KAAK,CAAC,eAAe,CAAC,QAAQ,CAAC,CAAC;QAChC,MAAM,CAAC,KAAK,CAAC;IACjB,CAAC;IACD,oBAAoB,CAAC,SAAS,CAAC,eAAe,GAAG,UAAU,QAAQ,EAAE,SAAS;QAC1E,EAAE,CAAC,CAAC,IAAI,CAAC,oBAAoB,CAAC,QAAQ,CAAC,CAAC,CAAC,CAAC;YACtC,MAAM,CAAC,EAAE,CAAC,IAAI,CAAC,oBAAoB,CAAC,QAAQ,CAAC,CAAC,SAAS,CAAC,IAAI,CAAC,CAAC,CAAC;QACnE,CAAC;QACD,MAAM,CAAC,MAAM,CAAC,SAAS,CAAC,eAAe,CAAC,IAAI,CAAC,IAAI,EAAE,QAAQ,EAAE,SAAS,CAAC,CAAC;IAC5E,CAAC,CAAC;IACF,oBAAoB,CAAC,SAAS,CAAC,eAAe,GAAG,UAAU,QAAQ;QAC/D,IAAI,KAAK,GAAG,IAAI,CAAC;QACjB,IAAI,GAAG,GAAG,QAAQ,CAAC,aAAa,CAAC,KAAK,CAAC,CAAC;QACxC,QAAQ,CAAC,OAAO,CAAC,UAAU,IAAI;YAC3B,mFAAmF;YACnF,GAAG,CAAC,SAAS,GAAG,IAAI,CAAC,SAAS,CAAC;YAC/B,KAAK,CAAC,oBAAoB,CAAC,IAAI,CAAC,IAAI,CAAC,GAAG,GAAG,CAAC,aAAa,CAAC,KAAK,CAAC,CAAC;QACrE,CAAC,CAAC,CAAC;IACP,CAAC,CAAC;IACF,oBAAoB,CAAC,cAAc,GAAG,cAAc,MAAM,CAAC,CAAC,EAAE,IAAI,EAAE,IAAI,EAAE,EAAE,EAAE,IAAI,EAAE,YAAY,EAAE,EAAE,EAAE,IAAI,EAAE,IAAI,EAAE,UAAU,EAAE,CAAC,EAAE,IAAI,EAAE,MAAM,EAAE,IAAI,EAAE,CAAC,SAAS,CAAC,EAAE,CAAC,EAAE,CAAC,CAAC,CAAC,CAAC,CAAC;IAC1K,MAAM,CAAC,oBAAoB,CAAC;AAChC,CAAC,CAAC,cAAc,CAAC,CAAC,CAAC;AACnB,OAAO,EAAE,oBAAoB,EAAE,CAAC;AAChC,uIAAuI"
-// };
-// // var secondSourceMap = intermediateSourceMap;
-
-// var sm1 = new SourceMapConsumer(firstSourceMap);
-// console.log(sm1.file);
-// console.log(sm1.sources);
-// console.log();
-// var sm2 = new SourceMapConsumer(secondSourceMap);
-// console.log(sm2.file);
-// console.log(sm2.sources);
-// console.log();
-
-// var smg = SourceMapGenerator.fromSourceMap(sm2)
-// smg.applySourceMap(sm1);
-// var sm3 = new SourceMapConsumer(smg.toJSON());
-// console.log(sm3.file);
-// console.log(sm3.sources);
-// console.log();
-
-
-
-// const consumer2 = new SourceMapConsumer(finalSourceMap);
-// consumer2.eachMapping((m) => console.log(m))
-// const generator2 = SourceMapGenerator.fromSourceMap(consumer2);
-// newSourceMap2 = JSON.stringify(generator2.toJSON());
-
-// console.log(content)
-// console.log(JSON.stringify(previousSourceMap))
-// console.log('###')
-// console.log(newContent)
-// console.log(JSON.stringify(intermediateSourceMap))
-// console.log('###')
-// console.log(newSourceMap)
-// console.log('###')
+function chainSourceMaps(sm1, sm2) {
+  const sm2c = new SourceMapConsumer(sm2);
+  const sm2g = SourceMapGenerator.fromSourceMap(sm2c);
+  sm2g.applySourceMap(new SourceMapConsumer(sm1));
+  return sm2g.toJSON();
+}

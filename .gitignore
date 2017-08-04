@@ -1,2 +1,3 @@
 node_modules/
-test-map.js.map
+files/chain-2-into-1.js.map
+files/chain-1-into-2.js.map
