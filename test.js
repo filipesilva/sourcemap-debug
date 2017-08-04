@@ -45,16 +45,17 @@ console.log('intermediateSourceMap valid:', validSourceMap(newContent, intermedi
 // main chaining example https://github.com/mozilla/source-map/issues/216
 
 // Chain the sourcemaps.
-// const consumer = new SourceMapConsumer(intermediateSourceMap);
-// const generator = SourceMapGenerator.fromSourceMap(consumer);
-// generator.applySourceMap(new SourceMapConsumer(previousSourceMap));
-// newSourceMapJson = generator.toJSON();
-// newSourceMap = JSON.stringify(generator.toJSON());
+const consumer = new SourceMapConsumer(intermediateSourceMap);
+const generator = SourceMapGenerator.fromSourceMap(consumer);
+generator.applySourceMap(new SourceMapConsumer(previousSourceMap));
+newSourceMapJson = generator.toJSON();
+newSourceMap = JSON.stringify(generator.toJSON());
 
-// console.log(newSourceMapJson.file);
-// console.log(newSourceMapJson.sources);
+console.log(newSourceMapJson.file);
+console.log(newSourceMapJson.sources);
 // console.log(newSourceMap);
-// writeFileSync('./test-map.js.map', newSourceMap)
+console.log('test source map valid:', validSourceMap(newContent, newSourceMapJson));
+writeFileSync('./test-map.js.map', newSourceMap)
 
 
 // firstSourceMap 
