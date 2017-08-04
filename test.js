@@ -2,15 +2,15 @@ const { RawSourceMap, SourceMapConsumer, SourceMapGenerator, SourceNode } = requ
 const { readFileSync, writeFileSync } = require('fs');
 
 
-const original = readFileSync('./custom-md-icon-registry.ts', 'utf-8');
+const original = readFileSync('./files/original.ts', 'utf-8');
 
-const content = readFileSync('./custom-md-icon-registry.js', 'utf-8');
-const previousSourceMap = JSON.parse(readFileSync('./custom-md-icon-registry.js.map', 'utf-8'));
+const transpile1Content = readFileSync('./files/transpile-1.js', 'utf-8');
+const transpile1Map = JSON.parse(readFileSync('./files/transpile-1.js.map', 'utf-8'));
 
-const newContent = readFileSync('./custom-md-icon-registry.bo.js', 'utf-8');
-const intermediateSourceMap = JSON.parse(readFileSync('./custom-md-icon-registry.bo.js.map', 'utf-8'));
+const transpile2Content = readFileSync('./files/transpile-2.js', 'utf-8');
+const transpile2Map = JSON.parse(readFileSync('./files/transpile-2.js.map', 'utf-8'));
 
-const finalSourceMap = JSON.parse(readFileSync('./custom-md-icon-registry.bo.js.full.map', 'utf-8'));
+const transpile2ToOriginalMap = JSON.parse(readFileSync('./files/transpile-2-to-original.js.map', 'utf-8'));
 
 // Test if the sourcemap can be consumed.
 // Doesn't guarantee the sourcemap is good, just that it doesn't break source-map.
@@ -31,30 +31,22 @@ function validSourceMap(code, map){
 }
 
 
-console.log('finalSourceMap valid:', validSourceMap(newContent, finalSourceMap));
-console.log('intermediateSourceMap valid:', validSourceMap(newContent, intermediateSourceMap));
+console.log('transpile2Map valid:', validSourceMap(transpile2Content, transpile2Map));
+console.log('transpile2ToOriginalMap valid:', validSourceMap(transpile2Content, transpile2ToOriginalMap));
 
-// validSourceMap(newContent, finalSourceMap);
-
-
-// If there's a previous sourcemap, we're an intermediate loader and we have to chain them.
-// Fill in the intermediate sourcemap source as the previous sourcemap file.
-// intermediateSourceMap.sources = [previousSourceMap.file];
-// intermediateSourceMap.file = previousSourceMap.file;
-
-// main chaining example https://github.com/mozilla/source-map/issues/216
+// Simple chaining example https://github.com/mozilla/source-map/issues/216#issuecomment-150839869
 
 // Chain the sourcemaps.
-const consumer = new SourceMapConsumer(intermediateSourceMap);
+const consumer = new SourceMapConsumer(transpile2Map);
 const generator = SourceMapGenerator.fromSourceMap(consumer);
-generator.applySourceMap(new SourceMapConsumer(previousSourceMap));
+generator.applySourceMap(new SourceMapConsumer(transpile1Map));
 newSourceMapJson = generator.toJSON();
 newSourceMap = JSON.stringify(generator.toJSON());
 
 console.log(newSourceMapJson.file);
 console.log(newSourceMapJson.sources);
 // console.log(newSourceMap);
-console.log('test source map valid:', validSourceMap(newContent, newSourceMapJson));
+console.log('test source map valid:', validSourceMap(transpile2Content, newSourceMapJson));
 writeFileSync('./test-map.js.map', newSourceMap)
 
 
